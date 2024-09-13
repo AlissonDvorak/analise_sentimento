@@ -6,13 +6,6 @@ input_texto = APIRouter(
     prefix="/text",
     tags=["text"],
 )
-
-
-@input_texto.get("/alive")
-def prever_sentimento(texts):
-    predict_sentiment(texts)
-
-    return
     
     
 @input_texto.post("/predict_sentiment")

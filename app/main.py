@@ -1,6 +1,7 @@
 from fastapi import FastAPI,  Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from routers.input_audio import input_audio
 from routers.input_texto import input_texto 
 import uvicorn
 
@@ -15,6 +16,7 @@ def main():
 
 
 app.include_router(input_texto)
+app.include_router(input_audio)
 app.add_middleware(GZipMiddleware, minimum_size=500)
 app.add_middleware(CORSMiddleware,
     allow_origins=["*"],
