@@ -1,0 +1,9 @@
+fastapi
+pydub
+python-multipart
+SpeechRecognition
+torch 
+torchvision 
+torchaudio
+transformers
+uvicorn

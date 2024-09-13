@@ -16,7 +16,6 @@ def get_sentiment_label(stars: int) -> str:
     else:
         return "Desconhecido"
 
-# Carregar o tokenizer e o modelo pré-treinado
 tokenizer = BertTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 model = BertForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 
@@ -41,8 +40,8 @@ def predict_sentiment(texts: List[str]):
     
     results = []
     for text, prob in zip(texts, probabilities):
-        sentiment_idx = torch.argmax(prob).item()  # Pega o índice da classe com a maior probabilidade
-        sentiment = get_sentiment_label(sentiment_idx + 1)  # O modelo pode ter índices começando em 0
+        sentiment_idx = torch.argmax(prob).item()  
+        sentiment = get_sentiment_label(sentiment_idx + 1)  
         confidence = prob[sentiment_idx].item()
         results.append({
             "text": text,
@@ -61,14 +60,12 @@ def converter_para_wav(audio_data: BytesIO, input_format: str) -> BytesIO:
     return wav_io
 
 def prever_sentimento_audio(audio_data: BytesIO):
-    # Inicializa o reconhecedor
     recognizer = sr.Recognizer()
     
-    # Reconhece o texto
     try:
         with sr.AudioFile(audio_data) as source:
             audio = recognizer.record(source)
-        text = recognizer.recognize_google(audio, language='pt-BR')  # Use 'en-US' para inglês
+        text = recognizer.recognize_google(audio, language='pt-BR')  
         text = predict_sentiment([text])
         return text
     except sr.UnknownValueError:

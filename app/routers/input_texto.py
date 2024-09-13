@@ -1,6 +1,6 @@
 from models.models import TextRequest
 from services.service import predict_sentiment
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
 
 input_texto = APIRouter(
     prefix="/text",
