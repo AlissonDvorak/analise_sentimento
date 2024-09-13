@@ -1,10 +1,10 @@
+from transformers import RobertaTokenizer, RobertaForSequenceClassification
 import torch
-from transformers import BertTokenizer, BertForSequenceClassification
 from typing import List
 
 # Carregar o tokenizer e o modelo pré-treinado
-tokenizer = BertTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
-model = BertForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
+tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+model = RobertaForSequenceClassification.from_pretrained('roberta-base')
 
 def preprocess_text(texts: List[str], max_length: int = 128):
     inputs = tokenizer(
@@ -12,8 +12,7 @@ def preprocess_text(texts: List[str], max_length: int = 128):
         padding=True,
         truncation=True,
         max_length=max_length,
-        return_tensors='pt',
-        clean_up_tokenization_spaces=False
+        return_tensors='pt'
     )
     return inputs
 
@@ -39,7 +38,6 @@ def predict_sentiment(texts: List[str], confidence_threshold: float = 0.5):
     results = []
     for text, prob in zip(texts, probabilities):
         sentiment_idx = torch.argmax(prob).item()
-        print(sentiment_idx)
         sentiment = get_sentiment_label(sentiment_idx + 1)
         confidence = prob[sentiment_idx].item()
         if confidence >= confidence_threshold:
@@ -55,5 +53,4 @@ def predict_sentiment(texts: List[str], confidence_threshold: float = 0.5):
                 "confidence": round(confidence, 4)
             })
     return results
-
 
