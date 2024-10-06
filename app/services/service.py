@@ -1,9 +1,10 @@
 from typing import List
 import torch
-from transformers import BertTokenizer, BertForSequenceClassification
+from transformers import BertTokenizer, BertForSequenceClassification, pipeline
 import speech_recognition as sr
 from io import BytesIO
 from pydub import AudioSegment
+
 
 # Definir o mapeamento de sentimentos para estrelas
 def get_sentiment_label(stars: int) -> str:
@@ -73,4 +74,9 @@ def prever_sentimento_audio(audio_data: BytesIO):
     except sr.RequestError:
         return "Erro ao se conectar ao serviço de reconhecimento"
     
-    
+# Inicializa o pipeline de transcrição
+transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True)
+
+def transcribe(audio_bytes):
+    # Usa o pipeline para transcrever o áudio
+    return transcriber(audio_bytes)
