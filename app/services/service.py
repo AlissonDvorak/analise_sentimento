@@ -4,6 +4,7 @@ from transformers import BertTokenizer, BertForSequenceClassification, pipeline
 import speech_recognition as sr
 from io import BytesIO
 from pydub import AudioSegment
+from pyannote.audio import Pipeline
 
 
 # Definir o mapeamento de sentimentos para estrelas
@@ -19,6 +20,8 @@ def get_sentiment_label(stars: int) -> str:
 
 tokenizer = BertTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 model = BertForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
+pipeline_diarization = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1", use_auth_token="TOKEN_HERE")
+transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True)
 
 def preprocess_text(texts: List[str], max_length: int = 128):
     inputs = tokenizer(
@@ -74,9 +77,57 @@ def prever_sentimento_audio(audio_data: BytesIO):
     except sr.RequestError:
         return "Erro ao se conectar ao serviço de reconhecimento"
     
-# Inicializa o pipeline de transcrição
-transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True)
+
 
 def transcribe(audio_bytes):
     # Usa o pipeline para transcrever o áudio
     return transcriber(audio_bytes)
+
+
+
+def process_audio(audio_data: BytesIO, input_format: str):
+    # Salva o áudio em um arquivo temporário
+    with open("temp_audio.wav", "wb") as f:
+        f.write(audio_data.read())
+    
+    # Diariza o áudio
+    diarization = pipeline_diarization("temp_audio.wav")
+    
+    # Transcreve todo o áudio com timestamps
+    transcription = transcriber("temp_audio.wav")
+
+    # Cria um dicionário para armazenar as falas dos locutores em ordem
+    speaker_lines = {speaker: [] for _, _, speaker in diarization.itertracks(yield_label=True)}
+
+    # Itera sobre os segmentos da transcrição
+    for segment in transcription['chunks']:
+        segment_start, segment_end = segment['timestamp']
+        segment_text = segment['text'].strip()
+
+        # Verifica a qual locutor o segmento pertence
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            start_time = turn.start
+            end_time = turn.end
+
+            # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+            if segment_end > start_time and segment_start < end_time:
+                # Adiciona a frase completa com o locutor
+                speaker_lines[speaker].append(segment_text)
+
+    # Monta a saída na ordem dos trechos do Whisper
+    output = []
+    for segment in transcription['chunks']:
+        segment_start, segment_end = segment['timestamp']
+        segment_text = segment['text'].strip()
+        
+        # Verifica a qual locutor o segmento pertence
+        for turn, _, speaker in diarization.itertracks(yield_label=True):
+            start_time = turn.start
+            end_time = turn.end
+            
+            # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+            if segment_end > start_time and segment_start < end_time:
+                output.append(f"Locutor {speaker}: {segment_text}")
+                break  # Sai do loop após encontrar o locutor correspondente
+
+    return output

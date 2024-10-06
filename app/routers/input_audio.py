@@ -1,7 +1,8 @@
-from typing import Optional
-from fastapi import FastAPI, File, UploadFile, APIRouter
+from fastapi import File, UploadFile, APIRouter
 from io import BytesIO
-from services.service import converter_para_wav, predict_sentiment, prever_sentimento_audio, transcribe
+
+from fastapi.responses import JSONResponse
+from services.service import converter_para_wav, predict_sentiment, prever_sentimento_audio, process_audio, transcribe
 
 
 
@@ -15,6 +16,21 @@ input_audio = APIRouter(
 @input_audio.post("/upload-audio/")
 async def upload_audio(file: UploadFile = File(...), description: str = None):
     # Lê o conteúdo do arquivo de áudio
+    """
+    Endpoint para transcrever um arquivo de áudio e prever o sentimento.
+
+    - Recebe um arquivo de áudio e uma descrição opcional.
+    - Transcreve o áudio com o modelo recognizer.
+    - Preve o sentimento da transcrição com o modelo BERT.
+    - Retorna o nome do arquivo, a descrição e a transcrição com o sentimento.
+
+    :param file: Arquivo de áudio a ser transcrito.
+    :type file: UploadFile
+    :param description: Descrição opcional do arquivo.
+    :type description: str
+    :return: Dicionário com o nome do arquivo, a descrição e a transcrição com o sentimento.
+    :rtype: dict
+    """
     audio_data = BytesIO(await file.read())
     
     # Converte o áudio para .wav
@@ -37,6 +53,21 @@ async def upload_audio(file: UploadFile = File(...), description: str = None):
 @input_audio.post("/upload-audio-whisper/")
 async def transcribe_audio(file: UploadFile = File(...), description: str = None):
     # Lê o conteúdo do arquivo
+    """
+    Endpoint para transcrever um arquivo de áudio e prever o sentimento.
+
+    - Recebe um arquivo de áudio e uma descrição opcional.
+    - Transcreve o áudio com o modelo Whisper.
+    - Preve o sentimento da transcrição com o modelo BERT.
+    - Retorna o nome do arquivo, a descrição e a transcrição com o sentimento.
+
+    :param file: Arquivo de áudio a ser transcrito.
+    :type file: UploadFile
+    :param description: Descrição opcional do arquivo.
+    :type description: str
+    :return: Dicionário com o nome do arquivo, a descrição e a transcrição com o sentimento.
+    :rtype: dict
+    """
     audio_bytes = await file.read()
 
     # Usa a função de transcrição
@@ -59,3 +90,20 @@ async def transcribe_audio(file: UploadFile = File(...), description: str = None
         "transcricao": resultado_sentimento,
 
     }
+    
+    
+@input_audio.post("/upload-call/")
+async def upload_audio(file: UploadFile = File(...)):
+    # Ler o conteúdo do arquivo de áudio
+    """
+    Endpoint para upload de um áudio de uma ligação.
+    Retorna a transcrição do áudio em forma de lista de strings identificando os locutores.
+    Cada string representa uma fala, e contém o texto transcrito por cada locutor.
+    """
+    audio_data = BytesIO(await file.read())
+    
+    # Processar o áudio
+    transcript = process_audio(audio_data, file.content_type.split('/')[1])
+    
+    # Retornar a transcrição organizada
+    return JSONResponse(content={"transcript": transcript})

@@ -64,3 +64,57 @@ Você pode implementar um sistema de notificações automáticas que avise o usu
 
 Exemplo de uso: alertar quando uma mensagem com tom crítico ou urgente for detectada.
 Essas são algumas ideias que podem complementar o projeto, trazendo mais valor e versatilidade, dependendo do seu público-alvo e caso de uso. Alguma dessas ideias parece interessante para você explorar?
+
+
+ideias:
+
+# from pyannote.audio import Pipeline
+# import librosa
+# import soundfile as sf
+# from transformers import pipeline
+
+# # Inicializa a diarização de locutores
+# pipeline_diarization = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1",
+#                                                 use_auth_token="")
+
+# # Aplica a diarização
+# diarization = pipeline_diarization("/home/alisson/Projetos/.Pessoais/analise_sentimento/app/assets/WhatsApp-Audio-2024-10-06-at-12.20.08-PM.mp3")
+
+# # Carrega o áudio
+# audio_file = "/home/alisson/Projetos/.Pessoais/analise_sentimento/app/assets/WhatsApp-Audio-2024-10-06-at-12.20.08-PM.mp3"
+# audio, sr = librosa.load(audio_file, sr=None)
+
+# # Inicializa a transcrição
+# transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True)
+
+# # Dicionário para armazenar a transcrição por locutor
+# transcriptions = {}
+
+# # Processa cada segmento da diarização
+# for turn, _, speaker in diarization.itertracks(yield_label=True):
+#     start_time = turn.start
+#     end_time = turn.end
+
+#     # Extrai o trecho de áudio correspondente ao locutor
+#     start_sample = int(start_time * sr)
+#     end_sample = int(end_time * sr)
+#     audio_chunk = audio[start_sample:end_sample]
+    
+#     # Salva o trecho de áudio temporariamente (opcional, pode enviar direto como bytes)
+#     sf.write("temp_audio.wav", audio_chunk, sr)
+    
+#     # Transcreve o trecho de áudio
+#     with open("temp_audio.wav", "rb") as audio_file:
+#         transcription = transcriber(audio_file.read())
+    
+#     # Armazena a transcrição do locutor
+#     if speaker not in transcriptions:
+#         transcriptions[speaker] = []
+#     transcriptions[speaker].append((start_time, end_time, transcription['text']))
+
+# # Exibe a transcrição separada por locutor
+# for speaker, segments in transcriptions.items():
+#     print(f"\nTranscrições para {speaker}:")
+#     for start, end, text in segments:
+#         print(f"{start:.2f}s - {end:.2f}s: {text}")
+
