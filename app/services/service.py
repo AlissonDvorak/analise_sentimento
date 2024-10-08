@@ -5,6 +5,10 @@ import speech_recognition as sr
 from io import BytesIO
 from pydub import AudioSegment
 from pyannote.audio import Pipeline
+import concurrent.futures
+import os
+import warnings
+warnings.filterwarnings("ignore")
 
 
 # Definir o mapeamento de sentimentos para estrelas
@@ -18,10 +22,16 @@ def get_sentiment_label(stars: int) -> str:
     else:
         return "Desconhecido"
 
+device = 0 if torch.cuda.is_available() else -1
+
+
+
+
 tokenizer = BertTokenizer.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 model = BertForSequenceClassification.from_pretrained('nlptown/bert-base-multilingual-uncased-sentiment')
 pipeline_diarization = Pipeline.from_pretrained("pyannote/speaker-diarization@2.1", use_auth_token="TOKEN_HERE")
-transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True)
+transcriber = pipeline("automatic-speech-recognition", model="openai/whisper-large-v3", return_timestamps=True, device=device)
+
 
 def preprocess_text(texts: List[str], max_length: int = 128):
     inputs = tokenizer(
@@ -85,16 +95,32 @@ def transcribe(audio_bytes):
 
 
 
+
 def process_audio(audio_data: BytesIO, input_format: str):
+  
     # Salva o áudio em um arquivo temporário
-    with open("temp_audio.wav", "wb") as f:
+    temp_audio_path = "temp_audio.wav"
+    with open(temp_audio_path, "wb") as f:
         f.write(audio_data.read())
     
-    # Diariza o áudio
-    diarization = pipeline_diarization("temp_audio.wav")
-    
-    # Transcreve todo o áudio com timestamps
-    transcription = transcriber("temp_audio.wav")
+    # Função para realizar a diarização
+    def diarize():
+        diarization = pipeline_diarization(temp_audio_path)
+        return diarization
+
+    # Função para realizar a transcrição
+    def transcribe():
+        transcription = transcriber(temp_audio_path)
+        return transcription
+
+    # Executa diarização e transcrição em paralelo com limite de 2 threads
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        diarization_future = executor.submit(diarize)
+        transcription_future = executor.submit(transcribe)
+
+        # Aguarda os resultados com intervalo de descanso
+        diarization = diarization_future.result()
+        transcription = transcription_future.result()
 
     # Cria um dicionário para armazenar as falas dos locutores em ordem
     speaker_lines = {speaker: [] for _, _, speaker in diarization.itertracks(yield_label=True)}
@@ -106,11 +132,11 @@ def process_audio(audio_data: BytesIO, input_format: str):
 
         # Verifica a qual locutor o segmento pertence
         for turn, _, speaker in diarization.itertracks(yield_label=True):
-            start_time = turn.start
-            end_time = turn.end
+            turn_start = turn.start  # Renomeado para evitar confusão com 'start_time'
+            turn_end = turn.end
 
             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
-            if segment_end > start_time and segment_start < end_time:
+            if segment_end > turn_start and segment_start < turn_end:
                 # Adiciona a frase completa com o locutor
                 speaker_lines[speaker].append(segment_text)
 
@@ -122,12 +148,157 @@ def process_audio(audio_data: BytesIO, input_format: str):
         
         # Verifica a qual locutor o segmento pertence
         for turn, _, speaker in diarization.itertracks(yield_label=True):
-            start_time = turn.start
-            end_time = turn.end
+            turn_start = turn.start  # Renomeado para evitar confusão com 'start_time'
+            turn_end = turn.end
             
             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
-            if segment_end > start_time and segment_start < end_time:
+            if segment_end > turn_start and segment_start < turn_end:
                 output.append(f"Locutor {speaker}: {segment_text}")
                 break  # Sai do loop após encontrar o locutor correspondente
+    # Remove o arquivo temporário
+    os.remove(temp_audio_path)
 
     return output
+
+# import os
+
+
+# def process_audio(audio_data: BytesIO, input_format: str):
+#     start_time = time.time()  # Início da contagem de tempo
+#     # Salva o áudio em um arquivo temporário
+#     temp_audio_path = "temp_audio.wav"
+#     with open(temp_audio_path, "wb") as f:
+#         f.write(audio_data.read())
+    
+#     # Diariza o áudio
+#     diarization_start_time = time.time()  # Medindo o tempo da diarização
+#     diarization = pipeline_diarization(temp_audio_path)
+#     diarization_elapsed = time.time() - diarization_start_time
+#     print(f"Tempo de diarização: {diarization_elapsed:.2f} segundos")
+
+#     # Transcreve todo o áudio com timestamps
+#     transcription_start_time = time.time()  # Medindo o tempo da transcrição
+#     transcription = transcriber(temp_audio_path)
+#     transcription_elapsed = time.time() - transcription_start_time
+#     print(f"Tempo de transcrição: {transcription_elapsed:.2f} segundos")
+
+#     # Cria um dicionário para armazenar as falas dos locutores em ordem
+#     speaker_lines = {speaker: [] for _, _, speaker in diarization.itertracks(yield_label=True)}
+
+#     # Itera sobre os segmentos da transcrição
+#     for segment in transcription['chunks']:
+#         segment_start, segment_end = segment['timestamp']
+#         segment_text = segment['text'].strip()
+
+#         # Verifica a qual locutor o segmento pertence
+#         for turn, _, speaker in diarization.itertracks(yield_label=True):
+#             turn_start = turn.start  # Renomeado para evitar confusão
+#             turn_end = turn.end
+
+#             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+#             if segment_end > turn_start and segment_start < turn_end:
+#                 # Adiciona a frase completa com o locutor
+#                 speaker_lines[speaker].append(segment_text)
+
+#     # Monta a saída na ordem dos trechos do Whisper
+#     output = []
+#     for segment in transcription['chunks']:
+#         segment_start, segment_end = segment['timestamp']
+#         segment_text = segment['text'].strip()
+        
+#         # Verifica a qual locutor o segmento pertence
+#         for turn, _, speaker in diarization.itertracks(yield_label=True):
+#             turn_start = turn.start  # Renomeado para evitar confusão
+#             turn_end = turn.end
+            
+#             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+#             if segment_end > turn_start and segment_start < turn_end:
+#                 output.append(f"Locutor {speaker}: {segment_text}")
+#                 break  # Sai do loop após encontrar o locutor correspondente
+
+#     elapsed_time = time.time() - start_time  # Calcula o tempo total
+#     print(f"Tempo total de processamento: {elapsed_time:.2f} segundos")
+
+#     # Remove o arquivo temporário
+#     os.remove(temp_audio_path)
+    
+#     return output
+
+
+
+# # killer pc
+# def process_audio(audio_data: BytesIO, input_format: str):
+#     start_time = time.time()  # Início da contagem de tempo
+    
+#     # Salva o áudio em um arquivo temporário
+#     temp_audio_path = "temp_audio.wav"
+#     with open(temp_audio_path, "wb") as f:
+#         f.write(audio_data.read())
+    
+#     # Função para realizar a diarização
+#     def diarize():
+#         print("Iniciando a diarização...")
+#         diarization = pipeline_diarization(temp_audio_path)
+#         print("Diarização concluída.")
+#         return diarization
+
+#     # Função para realizar a transcrição
+#     def transcribe():
+#         print("Iniciando a transcrição...")
+#         transcription = transcriber(temp_audio_path)
+#         print("Transcrição concluída.")
+#         return transcription
+
+#     # Executa diarização e transcrição em paralelo
+#     with concurrent.futures.ThreadPoolExecutor() as executor:
+#         diarization_future = executor.submit(diarize)
+#         transcription_future = executor.submit(transcribe)
+
+#         # Aguarda os resultados
+#         diarization = diarization_future.result()
+#         transcription = transcription_future.result()
+
+#     # Verifica se a transcrição foi realizada na GPU
+#     if torch.cuda.is_available():
+#         print("A transcrição foi realizada na GPU.")
+#     else:
+#         print("A transcrição foi realizada na CPU.")
+
+#     # Cria um dicionário para armazenar as falas dos locutores em ordem
+#     speaker_lines = {speaker: [] for _, _, speaker in diarization.itertracks(yield_label=True)}
+
+#     # Itera sobre os segmentos da transcrição
+#     for segment in transcription['chunks']:
+#         segment_start, segment_end = segment['timestamp']
+#         segment_text = segment['text'].strip()
+
+#         # Verifica a qual locutor o segmento pertence
+#         for turn, _, speaker in diarization.itertracks(yield_label=True):
+#             turn_start = turn.start  # Renomeado para evitar confusão com 'start_time'
+#             turn_end = turn.end
+
+#             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+#             if segment_end > turn_start and segment_start < turn_end:
+#                 # Adiciona a frase completa com o locutor
+#                 speaker_lines[speaker].append(segment_text)
+
+#     # Monta a saída na ordem dos trechos do Whisper
+#     output = []
+#     for segment in transcription['chunks']:
+#         segment_start, segment_end = segment['timestamp']
+#         segment_text = segment['text'].strip()
+        
+#         # Verifica a qual locutor o segmento pertence
+#         for turn, _, speaker in diarization.itertracks(yield_label=True):
+#             turn_start = turn.start  # Renomeado para evitar confusão com 'start_time'
+#             turn_end = turn.end
+            
+#             # Verifica se o segmento de transcrição está dentro do intervalo do locutor
+#             if segment_end > turn_start and segment_start < turn_end:
+#                 output.append(f"Locutor {speaker}: {segment_text}")
+#                 break  # Sai do loop após encontrar o locutor correspondente
+    
+#     elapsed_time = time.time() - start_time  # Calcula o tempo total
+#     print(f"Tempo de transcrição: {elapsed_time:.2f} segundos")
+
+#     return output
